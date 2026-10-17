@@ -10,6 +10,7 @@ import json
 import hashlib
 import base64
 import struct
+import time
 import os
 import signal
 import urllib.parse
@@ -18,9 +19,78 @@ PORT    = 8443
 WS_PATH = "/ws"
 DEBUG   = True
 
+# ── Shared state ─────────────────────────────────────────────────────────────
+rooms      = {}   # room_id → { "peers": { peer_id → PeerState } }
+rooms_lock = None # asyncio.Lock() created inside main()
+
 def log(*a):
     if DEBUG:
         print("[Server]", *a, flush=True)
+
+# ── Peer state ────────────────────────────────────────────────────────────────
+class PeerState:
+    def __init__(self, peer_id, name, role):
+        self.id        = peer_id
+        self.name      = name
+        self.role      = role
+        self.ver       = 1
+        self.last_seen = time.time()
+        self.writer    = None
+        self.left      = False
+
+    def to_dict(self):
+        return {"id": self.id, "name": self.name, "role": self.role, "ver": self.ver}
+
+# ── Room helpers ──────────────────────────────────────────────────────────────
+async def get_or_create_room(room_id):
+    async with rooms_lock:
+        if room_id not in rooms:
+            rooms[room_id] = {"peers": {}}
+            log(f"Room created: {room_id}")
+        return rooms[room_id]
+
+async def register_peer(room_id, peer_id, name, role):
+    await get_or_create_room(room_id)
+    async with rooms_lock:
+        room = rooms[room_id]
+        if peer_id in room["peers"]:
+            p = room["peers"][peer_id]
+            p.name = name; p.role = role
+            p.ver += 1; p.last_seen = time.time(); p.left = False
+        else:
+            p = PeerState(peer_id, name, role)
+            room["peers"][peer_id] = p
+        log(f"Registered {name} ({peer_id}) as {role} ver={p.ver} in {room_id}")
+        return p.ver
+
+async def mark_left(room_id, peer_id):
+    async with rooms_lock:
+        room = rooms.get(room_id)
+        if room and peer_id in room["peers"]:
+            peer = room["peers"][peer_id]
+            if peer.left:
+                return  # already marked — ignore duplicate (client leave + WS finally)
+            peer.left   = True
+            peer.writer = None
+            log(f"Peer left: {peer_id} in {room_id}")
+
+async def get_active_peers(room_id):
+    async with rooms_lock:
+        room = rooms.get(room_id, {})
+        return [p.to_dict() for p in room.get("peers", {}).values() if not p.left]
+
+async def broadcast_roster(room_id):
+    roster = await get_active_peers(room_id)
+    msg    = json.dumps({"type": "roster", "peers": roster})
+    async with rooms_lock:
+        room    = rooms.get(room_id, {})
+        writers = [(pid, p.writer) for pid, p in room.get("peers", {}).items()
+                   if not p.left and p.writer]
+    for pid, writer in writers:
+        try:
+            await ws_send(writer, msg)
+        except Exception as e:
+            log(f"Broadcast error for {pid}: {e}")
 
 # ── WebSocket framing (RFC 6455) ──────────────────────────────────────────────
 MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -94,6 +164,8 @@ def serve_static_sync(path, writer):
 
 # ── Connection dispatcher ─────────────────────────────────────────────────────
 async def handle_connection(reader, writer):
+    peer_id = None
+    room_id = None
     try:
         # Read HTTP request headers
         raw = b""
@@ -138,8 +210,22 @@ async def handle_connection(reader, writer):
                     if mtype != "ping":
                         log(f"WS [{mtype}] from={msg.get('from','?')} room={msg.get('room','?')}")
 
+                    if mtype == "register":
+                        room_id = msg["room"]
+                        peer_id = msg["peer"]
+                        ver     = await register_peer(room_id, peer_id, msg.get("name", peer_id), msg.get("role", "guest"))
+                        async with rooms_lock:
+                            rooms[room_id]["peers"][peer_id].writer = writer
+                        await ws_send(writer, json.dumps({"type": "registered", "ver": ver}))
+                        await broadcast_roster(room_id)
+
             except Exception as e:
-                log(f"WS session error: {e}")
+                log(f"WS session error ({peer_id}): {e}")
+            finally:
+                if peer_id and room_id:
+                    await mark_left(room_id, peer_id)
+                    await broadcast_roster(room_id)
+                    log(f"WS disconnected: {peer_id}")
         else:
             # Static file
             loop = asyncio.get_event_loop()
@@ -157,6 +243,9 @@ async def handle_connection(reader, writer):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 async def main():
+    global rooms_lock
+    rooms_lock = asyncio.Lock()
+
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain("cert.pem", "key.pem")
 
