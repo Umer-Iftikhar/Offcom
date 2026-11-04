@@ -48,3 +48,37 @@ async function showScreen(screenId) {
 		.forEach((s) => s.classList.remove("active"));
 	document.getElementById(screenId)?.classList.add("active");
 }
+
+// ---- QR code ----
+
+function generateQRCode(containerId, data) {
+	const container = document.getElementById(containerId);
+	if (!container || typeof qrcode === "undefined") return;
+	container.innerHTML = "";
+	try {
+		const qr = qrcode(0, "L");
+		qr.addData(data);
+		qr.make();
+		const mc = qr.getModuleCount(),
+			cs = 6,
+			m = 24,
+			size = mc * cs + m * 2;
+		const canvas = document.createElement("canvas");
+		canvas.width = canvas.height = size;
+		canvas.style.maxWidth = "100%";
+		canvas.style.height = "auto";
+		const ctx = canvas.getContext("2d");
+		ctx.fillStyle = "#ffffff";
+		ctx.fillRect(0, 0, size, size);
+		ctx.fillStyle = "#0a0a0f";
+		for (let r = 0; r < mc; r++) {
+			for (let c = 0; c < mc; c++) {
+				if (qr.isDark(r, c))
+					ctx.fillRect(m + c * cs, m + r * cs, cs, cs);
+			}
+		}
+		container.appendChild(canvas);
+	} catch (err) {
+		logError("[QR] Generation failed:", err);
+	}
+}
