@@ -14,9 +14,8 @@ async function selectRole(role) {
 		localStream = await navigator.mediaDevices.getUserMedia({ audio: constraints, video: false });
 		log('[Audio] Mic granted. Tracks:', localStream.getAudioTracks().length);
 
-		if (!isHost) return showToast('Joining a room is not ready yet', true);
 		showToast('Microphone ready!', false);
-		await showScreen('screenHost');
+		await showScreen(isHost ? 'screenHost' : 'screenGuest');
 	} catch (err) {
 		logError('[Audio] Mic error:', err);
 		showToast('ERROR: Allow microphone in Chrome!');
@@ -65,6 +64,37 @@ async function createHostRoom() {
 		btn.disabled  = false;
 		btn.innerHTML = 'Create Room';
 	}
+}
+
+// ---- Guest: join room ----
+
+async function joinRoom(url, roomId) {
+	signalingUrl          = url;
+	currentRoomId         = roomId;
+
+	try {
+		log(`[Init] Joining room ${roomId} at ${url}`);
+		showToast('Joining room...', false);
+
+		const ok = await registerGuest(roomId);
+		if (!ok) {
+			logError('[Init] Registration failed.');
+			showToast('Cannot reach server. Is it running?', true);
+			currentRoomId = null;
+			return;
+		}
+
+		showToast('Connected to room!', false);
+	} catch(err) {
+		logError('[Init] joinRoom error:', err);
+		showToast('Error joining: ' + err.message, true);
+	}
+}
+
+function joinRoomManual() {
+	const roomId = document.getElementById('manualRoomId')?.value.trim().toUpperCase();
+	if (!roomId) return showToast('Enter room ID!', true);
+	joinRoom(window.location.origin, roomId);
 }
 
 // ---- Navigation ----
