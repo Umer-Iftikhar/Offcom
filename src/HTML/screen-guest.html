@@ -1,7 +1,9 @@
 <div id="screenGuest" class="screen">
 	<div class="card">
-		<div class="card-title">Step 1: Join Room</div>
-		<p class="hint center">Enter the room ID shown on the host's screen:</p>
+		<div class="card-title">Step 1: Scan Room QR</div>
+		<button class="btn btn-scan" onclick="openScanner()">📸 Scan Room QR</button>
+		<div class="divider"></div>
+		<p class="hint center">Or enter room ID manually:</p>
 		<input type="text" id="manualRoomId" placeholder="Enter 16-character room ID">
 		<button class="btn btn-primary" onclick="joinRoomManual()" style="margin-top: 0.75rem;">Join Room</button>
 	</div>

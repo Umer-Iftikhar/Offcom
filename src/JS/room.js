@@ -108,6 +108,7 @@ async function goBack() {
 document.addEventListener('DOMContentLoaded', async () => {
 	log('=== OffCom Initializing ===');
 	if (typeof qrcode === 'undefined')         showToast('ERROR: QR library not loaded!', true);
+	if (typeof jsQR === 'undefined')           showToast('ERROR: Scanner library not loaded!', true);
 	if (!navigator.mediaDevices?.getUserMedia) showToast('ERROR: Microphone access not supported (use HTTPS)!', true);
 
 	// Boot the first screen dynamically

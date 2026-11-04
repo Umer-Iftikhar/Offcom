@@ -82,3 +82,112 @@ function generateQRCode(containerId, data) {
 		logError("[QR] Generation failed:", err);
 	}
 }
+
+// ---- Lazy overlay loader ----
+// Overlays live in /src/HTML/ partials and are injected into #overlayContainer on first use.
+
+const _overlayLoaded = {};
+
+async function loadOverlay(filename) {
+	if (_overlayLoaded[filename]) return;
+	try {
+		const res = await fetch(`/src/HTML/${filename}`);
+		if (!res.ok) throw new Error(`${filename} not found`);
+		const html = await res.text();
+		document
+			.getElementById("overlayContainer")
+			.insertAdjacentHTML("beforeend", html);
+		_overlayLoaded[filename] = true;
+		log("[UI] Overlay loaded:", filename);
+	} catch (e) {
+		logError("[UI] Failed to load overlay:", filename, e);
+		showToast("Error loading UI component", true);
+		throw e;
+	}
+}
+
+// ---- QR scanner ----
+
+let scannerStream = null;
+let scanInterval = null;
+
+async function openScanner() {
+	await loadOverlay("overlay-scanner.html");
+	document.getElementById("scannerOverlay").classList.remove("hidden");
+	document.getElementById("scannerStatus").textContent = "Starting camera...";
+	startScanner();
+}
+
+async function startScanner() {
+	try {
+		const video = document.getElementById("scannerVideo");
+		const canvas = document.getElementById("scannerCanvas");
+		const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+		scannerStream = await navigator.mediaDevices.getUserMedia({
+			video: { facingMode: "environment" },
+		});
+		video.srcObject = scannerStream;
+		await video.play();
+
+		canvas.width = video.videoWidth || 640;
+		canvas.height = video.videoHeight || 480;
+		document.getElementById("scannerStatus").textContent = "Scanning...";
+
+		scanInterval = setInterval(() => {
+			ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+			const imageData = ctx.getImageData(
+				0,
+				0,
+				canvas.width,
+				canvas.height,
+			);
+			if (typeof jsQR === "undefined") return;
+			const code = jsQR(
+				imageData.data,
+				imageData.width,
+				imageData.height,
+				{ inversionAttempts: "dontInvert" },
+			);
+			if (code) handleScannedQR(code.data);
+		}, 100);
+	} catch (err) {
+		document.getElementById("scannerStatus").textContent =
+			"Camera error: " + (err.message || err);
+	}
+}
+
+function handleScannedQR(data) {
+	if (!data.startsWith("OFFCOM:ROOM:")) {
+		document.getElementById("scannerStatus").textContent =
+			"Invalid QR format";
+		return;
+	}
+	const parts = data.slice("OFFCOM:ROOM:".length).split("::");
+	if (parts.length !== 2) {
+		document.getElementById("scannerStatus").textContent =
+			"Invalid QR format";
+		return;
+	}
+	closeScanner();
+	joinRoom(parts[0], parts[1]);
+}
+
+function closeScanner() {
+	if (scanInterval) {
+		clearInterval(scanInterval);
+		scanInterval = null;
+	}
+	if (scannerStream) {
+		scannerStream.getTracks().forEach((t) => t.stop());
+		scannerStream = null;
+	}
+	const overlay = document.getElementById("scannerOverlay");
+	if (overlay) {
+		overlay.classList.add("closing");
+		setTimeout(() => {
+			overlay.classList.add("hidden");
+			overlay.classList.remove("closing");
+		}, 200);
+	}
+}
