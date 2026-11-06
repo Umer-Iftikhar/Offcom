@@ -124,8 +124,22 @@ async function handleSignalingMessage(msg) {
 	log(`[Mesh] Received ${msg.type} from ${fromId}`);
 
 	if (!peers[fromId]) {
-		logError(`[Mesh] Message from unknown peer: ${fromId}. Ignoring.`);
-		return;
+		logError(`[Mesh] Message from unknown peer: ${fromId}. Creating fallback entry.`);
+		initPeer({ id: fromId, name: `Unknown (${fromId})`, role: 'guest', ver: 0 });
+	}
+
+	const p = peers[fromId];
+
+	if (msg.type === 'offer') {
+		const sigState  = p.pc.signalingState;
+		const connState = p.pc.connectionState;
+		log(`[Mesh] Offer from ${fromId}: signalingState=${sigState} connectionState=${connState}`);
+
+		if (sigState !== 'stable' || connState === 'connected') {
+			logError(`[Mesh] Glare or stale state (sig=${sigState} conn=${connState}), recreating PC`);
+			p.pc.close();
+			p.pc = createPeerConnection(fromId);
+		}
 	}
 
 	const pc = peers[fromId].pc;

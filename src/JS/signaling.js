@@ -119,8 +119,17 @@ function processRoster(roster) {
 			initPeer(peerObj);
 
 			if (!isHost) {
-				// Guest always offers to the host (host never initiates)
-				if (peerObj.role === 'host') initiateOffer(peerObj.id);
+				// Offer initiation rules:
+				//  • Guest always offers to the host (host never initiates)
+				//  • Between two guests, only the one whose ID sorts HIGHER sends the offer.
+				//    Both sides use the same comparison so exactly one offer is sent (no glare).
+				const shouldOffer = peerObj.role === 'host' || myDeviceId > peerObj.id;
+				if (shouldOffer) {
+					log(`[Mesh] ${myDeviceId} > ${peerObj.id} — I send the offer`);
+					initiateOffer(peerObj.id);
+				} else {
+					log(`[Mesh] ${myDeviceId} < ${peerObj.id} — waiting for their offer`);
+				}
 			}
 		}
 	}
