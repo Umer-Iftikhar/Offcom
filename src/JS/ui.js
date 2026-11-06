@@ -69,6 +69,50 @@ async function preloadScreen(screenId) {
 	}
 }
 
+// ---- Peer badge UI ----
+
+function addPeerToUI(peerObj) {
+	if (peerObj.id === myDeviceId) return;
+	const list = document.getElementById("peersList");
+	if (!list || document.getElementById("peer_badge_" + peerObj.id)) return;
+
+	const label =
+		peerObj.role === "host" ? `${peerObj.name} (Host)` : peerObj.name;
+	const badge = document.createElement("div");
+	badge.className = "peer-badge remote";
+	badge.id = "peer_badge_" + peerObj.id;
+	badge.innerHTML = `<span class="peer-name">${label}</span><span class="peer-status">◌ Connecting...</span>`;
+	list.appendChild(badge);
+}
+
+function updatePeerBadge(peerId, state) {
+	const badge = document.getElementById("peer_badge_" + peerId);
+	if (!badge) return;
+	badge.classList.remove("connected", "disconnected", "reconnecting");
+
+	let statusText = "";
+	switch (state) {
+		case "connected":
+			badge.classList.add("connected");
+			statusText = "● Connected";
+			break;
+		case "disconnected":
+		case "failed":
+			badge.classList.add("disconnected");
+			statusText = "✕ Disconnected";
+			break;
+		default:
+			statusText = "◌ Connecting...";
+			break;
+	}
+	const statusEl = badge.querySelector(".peer-status");
+	if (statusEl) statusEl.textContent = statusText;
+}
+
+function removePeerFromUI(peerId) {
+	document.getElementById("peer_badge_" + peerId)?.remove();
+}
+
 // ---- Call status ----
 
 function updateCallStatus() {

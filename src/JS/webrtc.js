@@ -25,6 +25,7 @@ function createPeerConnection(peerId) {
 	pc.ontrack = async (event) => {
 		logWebRTC(peerId, `Remote track received: ${event.track.kind}`);
 		attachRemoteStream(peerId, event.streams[0]);
+		updatePeerBadge(peerId, 'connected');
 		updateCallStatus();
 		// Guest auto-enters call screen on first audio track
 		if (!isHost && document.getElementById('screenGuest')?.classList.contains('active')) {
@@ -37,6 +38,7 @@ function createPeerConnection(peerId) {
 		const p = peers[peerId];
 		if (!p) return;
 
+		updatePeerBadge(peerId, pc.connectionState);
 		updateCallStatus();
 	};
 
@@ -66,6 +68,7 @@ function initPeer(peerObj) {
 		role:               peerObj.role,
 		audioEl:            null,
 	};
+	addPeerToUI(peerObj);
 	updateHostUI();
 }
 
@@ -76,6 +79,7 @@ function cleanupPeer(peerId) {
 	if (p.pc)      { try { p.pc.close(); } catch(e) {} }
 	if (p.audioEl) { p.audioEl.srcObject = null; p.audioEl.remove(); }
 	delete iceCandidateBuffer[peerId];
+	removePeerFromUI(peerId);
 	delete peers[peerId];
 	updateCallStatus();
 }
