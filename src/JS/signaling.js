@@ -39,6 +39,7 @@ function openWebSocket(roomId) {
 
 			if (msg.type === 'registered') {
 				wsReady = true;
+				startWsPing();
 				resolve(true);
 				return;
 			}
@@ -54,6 +55,7 @@ function openWebSocket(roomId) {
 		ws.onclose = (e) => {
 			log(`[WS] Closed (code=${e.code} intentional=${intentionalDisconnect})`);
 			wsReady = false;
+			stopWsPing();
 		};
 	});
 }
@@ -66,7 +68,19 @@ function wsSend(obj) {
 	ws.send(JSON.stringify(obj));
 }
 
+function startWsPing() {
+	stopWsPing();
+	wsPingTimer = setInterval(() => {
+		if (ws && ws.readyState === WebSocket.OPEN) wsSend({ type: 'ping' });
+	}, WS_PING_MS);
+}
+
+function stopWsPing() {
+	if (wsPingTimer) { clearInterval(wsPingTimer); wsPingTimer = null; }
+}
+
 function closeWebSocket() {
+	stopWsPing();
 	wsReady = false;
 	if (ws) { try { ws.close(); } catch(e) {} ws = null; }
 }
@@ -95,6 +109,8 @@ function postLeave(roomId, peerId) {
 // ---- Incoming server message router ----
 
 function handleServerMessage(msg) {
+	if (msg.type === 'pong') return;
+
 	if (msg.type === 'roster') {
 		processRoster(msg.peers || []);
 		return;

@@ -39,6 +39,8 @@ if (!myUsername) {
 // ---- WebSocket signaling state ----
 let ws            = null;
 let wsReady       = false;
+let wsPingTimer   = null;
+const WS_PING_MS  = 10000;
 
 // ---- Multi-peer state ----
 const peers = {};   // peerId → { pc, name, role, audioEl, ... }

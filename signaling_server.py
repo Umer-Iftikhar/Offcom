@@ -263,6 +263,14 @@ async def handle_connection(reader, writer):
                         await mark_left(leaving_rid, leaving_id)
                         await broadcast_roster(leaving_rid)
 
+                    elif mtype == "ping":
+                        if peer_id and room_id:
+                            async with rooms_lock:
+                                p = rooms.get(room_id, {}).get("peers", {}).get(peer_id)
+                                if p:
+                                    p.last_seen = time.time()
+                        await ws_send(writer, json.dumps({"type": "pong"}))
+
             except Exception as e:
                 log(f"WS session error ({peer_id}): {e}")
             finally:
@@ -285,6 +293,39 @@ async def handle_connection(reader, writer):
         except Exception:
             pass
 
+# ── Background loops ──────────────────────────────────────────────────────────
+async def roster_heartbeat():
+    """Push roster to all peers every 15s as a safety net for missed events.
+    Normal peer join/leave events are pushed immediately via broadcast_roster().
+    """
+    while True:
+        await asyncio.sleep(15)
+        async with rooms_lock:
+            room_ids = list(rooms.keys())
+        for rid in room_ids:
+            try:
+                await broadcast_roster(rid)
+            except Exception:
+                pass
+
+async def cleanup_loop():
+    while True:
+        await asyncio.sleep(15)
+        now = time.time()
+        async with rooms_lock:
+            dead = []
+            for rid, room in rooms.items():
+                for pid, peer in list(room["peers"].items()):
+                    if not peer.left and peer.writer is None and (now - peer.last_seen) > 45:
+                        peer.left = True
+                        log(f"Timeout (no WS): {pid} in {rid}")
+                active = [p for p in room["peers"].values() if not p.left]
+                if not active:
+                    dead.append(rid)
+            for rid in dead:
+                log(f"GC: removing empty room {rid}")
+                del rooms[rid]
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 async def main():
     global rooms_lock
@@ -294,6 +335,8 @@ async def main():
     ctx.load_cert_chain("cert.pem", "key.pem")
 
     server = await asyncio.start_server(handle_connection, "0.0.0.0", PORT, ssl=ctx)
+    asyncio.create_task(cleanup_loop())
+    asyncio.create_task(roster_heartbeat())
 
     loop     = asyncio.get_running_loop()
     stop_evt = asyncio.Event()
