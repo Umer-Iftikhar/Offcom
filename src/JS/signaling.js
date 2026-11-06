@@ -39,6 +39,7 @@ function openWebSocket(roomId) {
 
 			if (msg.type === 'registered') {
 				wsReady = true;
+				startWsPing();
 				resolve(true);
 				return;
 			}
@@ -52,8 +53,9 @@ function openWebSocket(roomId) {
 		};
 
 		ws.onclose = (e) => {
-			log(`[WS] Closed (code=${e.code})`);
+			log(`[WS] Closed (code=${e.code} intentional=${intentionalDisconnect})`);
 			wsReady = false;
+			stopWsPing();
 		};
 	});
 }
@@ -64,6 +66,23 @@ function wsSend(obj) {
 		return;
 	}
 	ws.send(JSON.stringify(obj));
+}
+
+function startWsPing() {
+	stopWsPing();
+	wsPingTimer = setInterval(() => {
+		if (ws && ws.readyState === WebSocket.OPEN) wsSend({ type: 'ping' });
+	}, WS_PING_MS);
+}
+
+function stopWsPing() {
+	if (wsPingTimer) { clearInterval(wsPingTimer); wsPingTimer = null; }
+}
+
+function closeWebSocket() {
+	stopWsPing();
+	wsReady = false;
+	if (ws) { try { ws.close(); } catch(e) {} ws = null; }
 }
 
 // Connect + register; returns true/false instead of throwing
@@ -78,11 +97,33 @@ async function registerGuest(roomId) {
 	}
 }
 
+// Send a WebRTC signaling message to a specific peer via the server relay
+function postMessage(toPeer, type, payload) {
+	wsSend({ type, room: currentRoomId, from: myDeviceId, to: toPeer, payload });
+}
+
+function postLeave(roomId, peerId) {
+	wsSend({ type: 'leave', room: roomId, peer: peerId });
+}
+
 // ---- Incoming server message router ----
 
 function handleServerMessage(msg) {
+	if (msg.type === 'pong') return;
+
 	if (msg.type === 'roster') {
 		processRoster(msg.peers || []);
+		return;
+	}
+
+	if (msg.type === 'offer' || msg.type === 'answer' || msg.type === 'candidate') {
+		handleSignalingMessage(msg);
+		return;
+	}
+
+	if (msg.type === 'room_closed') {
+		showToast('Host ended the room', true);
+		disconnect();
 		return;
 	}
 }
@@ -90,4 +131,45 @@ function handleServerMessage(msg) {
 // Process a roster push from the server
 function processRoster(roster) {
 	log(`[Roster] ${roster.length} peer(s): ${JSON.stringify(roster.map(p => `${p.id}/${p.role}`))}`);
+
+	// Guests leave when the host is gone
+	if (!isHost && roster.length > 0 && !intentionalDisconnect && !roster.some(p => p.role === 'host')) {
+		logError('[Mesh] Host vanished, disconnecting');
+		showToast('Host ended the room!', true);
+		disconnect();
+		return;
+	}
+
+	const activeIds = roster.map(p => p.id);
+
+	// Remove peers no longer in roster
+	for (const pid of Object.keys(peers)) {
+		if (!activeIds.includes(pid)) {
+			showToast(`${peers[pid].name} left`, false);
+			cleanupPeer(pid);
+		}
+	}
+
+	// Init new peers and decide who sends the offer
+	for (const peerObj of roster) {
+		if (peerObj.id === myDeviceId) continue;
+		if (!peers[peerObj.id]) {
+			log(`[Mesh] New peer in roster: ${peerObj.id}`);
+			initPeer(peerObj);
+
+			if (!isHost) {
+				// Offer initiation rules:
+				//  • Guest always offers to the host (host never initiates)
+				//  • Between two guests, only the one whose ID sorts HIGHER sends the offer.
+				//    Both sides use the same comparison so exactly one offer is sent (no glare).
+				const shouldOffer = peerObj.role === 'host' || myDeviceId > peerObj.id;
+				if (shouldOffer) {
+					log(`[Mesh] ${myDeviceId} > ${peerObj.id} — I send the offer`);
+					initiateOffer(peerObj.id);
+				} else {
+					log(`[Mesh] ${myDeviceId} < ${peerObj.id} — waiting for their offer`);
+				}
+			}
+		}
+	}
 }

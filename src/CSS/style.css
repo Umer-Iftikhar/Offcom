@@ -186,6 +186,71 @@ input {
 	border-radius: 8px;
 }
 
+/* Peers list */
+.peers-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin-top: 1rem;
+}
+
+.peer-badge {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	padding: 0.5rem 0.75rem;
+	background: var(--accent-dim);
+	border: 1px solid var(--accent);
+	border-radius: 20px;
+	font-size: 0.875rem;
+}
+
+.peer-badge .peer-name {
+	font-weight: 600;
+}
+
+.peer-badge .peer-status {
+	font-size: 0.75rem;
+	opacity: 0.75;
+}
+
+.peer-badge.remote {
+	background: rgba(255, 51, 102, 0.1);
+	border-color: var(--red);
+}
+
+.peer-badge.connected {
+	background: rgba(0, 255, 136, 0.2);
+	border-color: var(--accent);
+	animation: pulse 2s infinite;
+}
+
+.peer-badge.connected .peer-status {
+	color: var(--accent);
+}
+
+.peer-badge.disconnected {
+	background: rgba(255, 51, 102, 0.15);
+	border-color: var(--red);
+	opacity: 0.7;
+}
+
+.peer-badge.disconnected .peer-status {
+	color: var(--red);
+}
+
+@keyframes pulse {
+
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.4);
+	}
+
+	50% {
+		box-shadow: 0 0 0 8px rgba(0, 255, 136, 0);
+	}
+}
+
 /* Toast notifications */
 .toast {
 	position: fixed;

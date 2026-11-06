@@ -1,0 +1,19 @@
+<div id="screenCall" class="screen">
+	<!-- Room & Peers Card -->
+	<div class="card">
+		<div class="card-title">Room & Peers</div>
+		<div
+			style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border);">
+			<div style="flex: 1;">
+				<div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.25rem;">Your ID</div>
+				<div id="myIdDisplay"
+					style="font-weight: 800; color: var(--accent); font-size: 1.1rem; letter-spacing: 1px;">---</div>
+			</div>
+		</div>
+		<div class="peers-list" id="peersList"></div>
+		<div id="connState" style="color: var(--text-dim); font-size: 0.875rem; margin-top: 1rem; text-align: center;">
+			Waiting for connection...</div>
+	</div>
+
+	<button class="btn btn-danger" onclick="disconnect()" style="margin-top: 1rem;">End Session</button>
+</div>

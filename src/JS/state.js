@@ -7,6 +7,7 @@ const DEBUG = localStorage.getItem('offcom_debug') === 'true';
 
 function log(...args)      { if (DEBUG) console.log('[OffCom]', ...args); }
 function logError(...args) { console.error('[OffCom ERROR]', ...args); }
+function logWebRTC(peerId, msg) { if (DEBUG) console.log(`[WebRTC - ${peerId}]`, msg); }
 
 // ---- Audio pipeline ----
 let localStream     = null;
@@ -15,6 +16,7 @@ let localStream     = null;
 let isHost                = false;
 let currentRoomId         = null;
 let signalingUrl          = window.location.origin;
+let intentionalDisconnect = false;
 
 // ---- Identity (persisted across sessions) ----
 function generateRandomId(len) {
@@ -37,3 +39,11 @@ if (!myUsername) {
 // ---- WebSocket signaling state ----
 let ws            = null;
 let wsReady       = false;
+let wsPingTimer   = null;
+const WS_PING_MS  = 10000;
+
+// ---- Multi-peer state ----
+const peers = {};   // peerId → { pc, name, role, audioEl, ... }
+
+// ---- ICE candidate buffer (keyed by peerId) ----
+let iceCandidateBuffer = {};

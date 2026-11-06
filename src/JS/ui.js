@@ -49,6 +49,102 @@ async function showScreen(screenId) {
 	document.getElementById(screenId)?.classList.add("active");
 }
 
+// ---- Screen preloader ----
+// Fetches and injects a screen partial into the DOM without switching to it.
+// Call fire-and-forget so the HTML is ready when showScreen() needs it.
+
+async function preloadScreen(screenId) {
+	if (document.getElementById(screenId)) return; // already in DOM
+	try {
+		const fileName = screenFileName(screenId);
+		log("[UI] Preloading screen:", fileName);
+		const response = await fetch(`/src/HTML/${fileName}`);
+		if (!response.ok) throw new Error("Not found");
+		const html = await response.text();
+		document
+			.getElementById("mainContent")
+			.insertAdjacentHTML("afterbegin", html);
+	} catch (e) {
+		logError("[UI] Preload failed for", screenId, e);
+	}
+}
+
+// ---- Peer badge UI ----
+
+function addPeerToUI(peerObj) {
+	if (peerObj.id === myDeviceId) return;
+	const list = document.getElementById("peersList");
+	if (!list || document.getElementById("peer_badge_" + peerObj.id)) return;
+
+	const label =
+		peerObj.role === "host" ? `${peerObj.name} (Host)` : peerObj.name;
+	const badge = document.createElement("div");
+	badge.className = "peer-badge remote";
+	badge.id = "peer_badge_" + peerObj.id;
+	badge.innerHTML = `<span class="peer-name">${label}</span><span class="peer-status">◌ Connecting...</span>`;
+	list.appendChild(badge);
+}
+
+function updatePeerBadge(peerId, state) {
+	const badge = document.getElementById("peer_badge_" + peerId);
+	if (!badge) return;
+	badge.classList.remove("connected", "disconnected", "reconnecting");
+
+	let statusText = "";
+	switch (state) {
+		case "connected":
+			badge.classList.add("connected");
+			statusText = "● Connected";
+			break;
+		case "disconnected":
+		case "failed":
+			badge.classList.add("disconnected");
+			statusText = "✕ Disconnected";
+			break;
+		default:
+			statusText = "◌ Connecting...";
+			break;
+	}
+	const statusEl = badge.querySelector(".peer-status");
+	if (statusEl) statusEl.textContent = statusText;
+}
+
+function removePeerFromUI(peerId) {
+	document.getElementById("peer_badge_" + peerId)?.remove();
+}
+
+// ---- Call status ----
+
+function updateCallStatus() {
+	const connectedCount = Object.values(peers).filter(
+		(p) => p.pc?.connectionState === "connected",
+	).length;
+	const el = document.getElementById("connState");
+	if (!el) return;
+	if (connectedCount > 0) {
+		el.textContent = `Audio active — ${connectedCount} peer(s)`;
+		el.style.color = "var(--accent)";
+	} else {
+		el.textContent = "Waiting for connection...";
+		el.style.color = "var(--text-dim)";
+	}
+}
+
+function updateHostUI() {
+	if (
+		isHost &&
+		document.getElementById("screenHost")?.classList.contains("active")
+	) {
+		const count = Object.keys(peers).length;
+		if (count > 0) {
+			const cd = document.getElementById("peerCountDisplay");
+			const sb = document.getElementById("startCallBtn");
+			if (cd) cd.textContent = `${count} peer(s) detected`;
+			if (sb) sb.style.display = "";
+		}
+	}
+}
+
 // ---- QR code ----
 
 function generateQRCode(containerId, data) {
