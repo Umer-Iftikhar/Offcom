@@ -14,6 +14,9 @@ async function selectRole(role) {
 		localStream = await navigator.mediaDevices.getUserMedia({ audio: constraints, video: false });
 		log('[Audio] Mic granted. Tracks:', localStream.getAudioTracks().length);
 
+		// Kick off screenCall fetch in background — it'll be in the DOM before ICE finishes
+		preloadScreen('screenCall');
+
 		showToast('Microphone ready!', false);
 		await showScreen(isHost ? 'screenHost' : 'screenGuest');
 	} catch (err) {
@@ -33,6 +36,9 @@ async function createHostRoom() {
 
 		currentRoomId = generateRandomId(16);
 		signalingUrl  = window.location.origin;
+
+		const myIdDisplay = document.getElementById('myIdDisplay');
+		if (myIdDisplay) myIdDisplay.textContent = `${myUsername} (${myDeviceId})`;
 
 		document.getElementById('qrDisplayCard')?.classList.remove('hidden');
 		document.getElementById('waitForGuestCard')?.classList.remove('hidden');
@@ -66,11 +72,19 @@ async function createHostRoom() {
 	}
 }
 
+async function startCallWithPeers() {
+	await showScreen('screenCall');
+	updateCallStatus();
+}
+
 // ---- Guest: join room ----
 
 async function joinRoom(url, roomId) {
 	signalingUrl          = url;
 	currentRoomId         = roomId;
+
+	const myIdDisplay = document.getElementById('myIdDisplay');
+	if (myIdDisplay) myIdDisplay.textContent = `${myUsername} (${myDeviceId})`;
 
 	try {
 		log(`[Init] Joining room ${roomId} at ${url}`);
@@ -84,6 +98,8 @@ async function joinRoom(url, roomId) {
 			return;
 		}
 
+		await showScreen('screenCall');
+		updateCallStatus();
 		showToast('Connected to room!', false);
 	} catch(err) {
 		logError('[Init] joinRoom error:', err);

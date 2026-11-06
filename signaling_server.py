@@ -79,6 +79,20 @@ async def get_active_peers(room_id):
         room = rooms.get(room_id, {})
         return [p.to_dict() for p in room.get("peers", {}).values() if not p.left]
 
+async def relay(room_id, to_id, msg_obj):
+    async with rooms_lock:
+        room  = rooms.get(room_id, {})
+        peer  = room.get("peers", {}).get(to_id)
+        if not peer or peer.left or not peer.writer:
+            log(f"Cannot relay to {to_id}: unavailable")
+            return
+        writer = peer.writer
+    try:
+        await ws_send(writer, json.dumps(msg_obj))
+        log(f"Relayed [{msg_obj.get('type')}] to {to_id}")
+    except Exception as e:
+        log(f"Relay write error for {to_id}: {e}")
+
 async def broadcast_roster(room_id):
     roster = await get_active_peers(room_id)
     msg    = json.dumps({"type": "roster", "peers": roster})
@@ -218,6 +232,9 @@ async def handle_connection(reader, writer):
                             rooms[room_id]["peers"][peer_id].writer = writer
                         await ws_send(writer, json.dumps({"type": "registered", "ver": ver}))
                         await broadcast_roster(room_id)
+
+                    elif mtype in ("offer", "answer", "candidate"):
+                        await relay(msg["room"], msg["to"], msg)
 
             except Exception as e:
                 log(f"WS session error ({peer_id}): {e}")

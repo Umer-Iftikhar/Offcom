@@ -49,6 +49,58 @@ async function showScreen(screenId) {
 	document.getElementById(screenId)?.classList.add("active");
 }
 
+// ---- Screen preloader ----
+// Fetches and injects a screen partial into the DOM without switching to it.
+// Call fire-and-forget so the HTML is ready when showScreen() needs it.
+
+async function preloadScreen(screenId) {
+	if (document.getElementById(screenId)) return; // already in DOM
+	try {
+		const fileName = screenFileName(screenId);
+		log("[UI] Preloading screen:", fileName);
+		const response = await fetch(`/src/HTML/${fileName}`);
+		if (!response.ok) throw new Error("Not found");
+		const html = await response.text();
+		document
+			.getElementById("mainContent")
+			.insertAdjacentHTML("afterbegin", html);
+	} catch (e) {
+		logError("[UI] Preload failed for", screenId, e);
+	}
+}
+
+// ---- Call status ----
+
+function updateCallStatus() {
+	const connectedCount = Object.values(peers).filter(
+		(p) => p.pc?.connectionState === "connected",
+	).length;
+	const el = document.getElementById("connState");
+	if (!el) return;
+	if (connectedCount > 0) {
+		el.textContent = `Audio active — ${connectedCount} peer(s)`;
+		el.style.color = "var(--accent)";
+	} else {
+		el.textContent = "Waiting for connection...";
+		el.style.color = "var(--text-dim)";
+	}
+}
+
+function updateHostUI() {
+	if (
+		isHost &&
+		document.getElementById("screenHost")?.classList.contains("active")
+	) {
+		const count = Object.keys(peers).length;
+		if (count > 0) {
+			const cd = document.getElementById("peerCountDisplay");
+			const sb = document.getElementById("startCallBtn");
+			if (cd) cd.textContent = `${count} peer(s) detected`;
+			if (sb) sb.style.display = "";
+		}
+	}
+}
+
 // ---- QR code ----
 
 function generateQRCode(containerId, data) {

@@ -78,6 +78,11 @@ async function registerGuest(roomId) {
 	}
 }
 
+// Send a WebRTC signaling message to a specific peer via the server relay
+function postMessage(toPeer, type, payload) {
+	wsSend({ type, room: currentRoomId, from: myDeviceId, to: toPeer, payload });
+}
+
 // ---- Incoming server message router ----
 
 function handleServerMessage(msg) {
@@ -85,9 +90,38 @@ function handleServerMessage(msg) {
 		processRoster(msg.peers || []);
 		return;
 	}
+
+	if (msg.type === 'offer' || msg.type === 'answer' || msg.type === 'candidate') {
+		handleSignalingMessage(msg);
+		return;
+	}
 }
 
 // Process a roster push from the server
 function processRoster(roster) {
 	log(`[Roster] ${roster.length} peer(s): ${JSON.stringify(roster.map(p => `${p.id}/${p.role}`))}`);
+
+	const activeIds = roster.map(p => p.id);
+
+	// Remove peers no longer in roster
+	for (const pid of Object.keys(peers)) {
+		if (!activeIds.includes(pid)) {
+			showToast(`${peers[pid].name} left`, false);
+			cleanupPeer(pid);
+		}
+	}
+
+	// Init new peers and decide who sends the offer
+	for (const peerObj of roster) {
+		if (peerObj.id === myDeviceId) continue;
+		if (!peers[peerObj.id]) {
+			log(`[Mesh] New peer in roster: ${peerObj.id}`);
+			initPeer(peerObj);
+
+			if (!isHost) {
+				// Guest always offers to the host (host never initiates)
+				if (peerObj.role === 'host') initiateOffer(peerObj.id);
+			}
+		}
+	}
 }

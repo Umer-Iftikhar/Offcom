@@ -7,6 +7,7 @@ const DEBUG = localStorage.getItem('offcom_debug') === 'true';
 
 function log(...args)      { if (DEBUG) console.log('[OffCom]', ...args); }
 function logError(...args) { console.error('[OffCom ERROR]', ...args); }
+function logWebRTC(peerId, msg) { if (DEBUG) console.log(`[WebRTC - ${peerId}]`, msg); }
 
 // ---- Audio pipeline ----
 let localStream     = null;
@@ -37,3 +38,6 @@ if (!myUsername) {
 // ---- WebSocket signaling state ----
 let ws            = null;
 let wsReady       = false;
+
+// ---- Multi-peer state ----
+const peers = {};   // peerId → { pc, name, role, audioEl, ... }
