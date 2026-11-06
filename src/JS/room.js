@@ -7,6 +7,7 @@
 async function selectRole(role) {
 	log('[Init] Selecting role:', role);
 	isHost = role === 'host';
+	intentionalDisconnect = false;
 
 	try {
 		showToast('Requesting microphone...', false);
@@ -29,6 +30,7 @@ async function selectRole(role) {
 
 async function createHostRoom() {
 	const btn = document.getElementById('createOfferBtn');
+	intentionalDisconnect = false;
 	try {
 		log('[Init] createHostRoom clicked');
 		btn.disabled  = true;
@@ -80,6 +82,7 @@ async function startCallWithPeers() {
 // ---- Guest: join room ----
 
 async function joinRoom(url, roomId) {
+	intentionalDisconnect = false;
 	signalingUrl          = url;
 	currentRoomId         = roomId;
 
@@ -113,11 +116,40 @@ function joinRoomManual() {
 	joinRoom(window.location.origin, roomId);
 }
 
-// ---- Navigation ----
+// ---- Disconnect ----
 
-async function goBack() {
+async function disconnect() {
+	log(`[Cleanup] disconnect() called — room=${currentRoomId} isHost=${isHost} peers=${Object.keys(peers).join(',')}`);
+
+	intentionalDisconnect = true;
+
+	// Send leave BEFORE closing the socket so the server can notify other peers
+	if (currentRoomId && myDeviceId) postLeave(currentRoomId, myDeviceId);
+	closeWebSocket();
+
+	for (const peerId of Object.keys(peers)) cleanupPeer(peerId);
+
+
+	if (localStream)   { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+
+	currentRoomId = null;
+
+	const btn = document.getElementById('createOfferBtn');
+	if (btn) { btn.disabled = false; btn.innerHTML = 'Create Room'; }
+
+	document.getElementById('qrDisplayCard')?.classList.add('hidden');
+	document.getElementById('waitForGuestCard')?.classList.add('hidden');
+
+	const peersList = document.getElementById('peersList');
+	if (peersList) peersList.innerHTML = '';
+
+	const startBtn = document.getElementById('startCallBtn');
+	if (startBtn) startBtn.style.display = 'none';
+
 	await showScreen('screenRole');
 }
+
+async function goBack() { await disconnect(); }
 
 // ---- Init ----
 

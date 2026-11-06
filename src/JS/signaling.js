@@ -52,7 +52,7 @@ function openWebSocket(roomId) {
 		};
 
 		ws.onclose = (e) => {
-			log(`[WS] Closed (code=${e.code})`);
+			log(`[WS] Closed (code=${e.code} intentional=${intentionalDisconnect})`);
 			wsReady = false;
 		};
 	});
@@ -64,6 +64,11 @@ function wsSend(obj) {
 		return;
 	}
 	ws.send(JSON.stringify(obj));
+}
+
+function closeWebSocket() {
+	wsReady = false;
+	if (ws) { try { ws.close(); } catch(e) {} ws = null; }
 }
 
 // Connect + register; returns true/false instead of throwing
@@ -83,6 +88,10 @@ function postMessage(toPeer, type, payload) {
 	wsSend({ type, room: currentRoomId, from: myDeviceId, to: toPeer, payload });
 }
 
+function postLeave(roomId, peerId) {
+	wsSend({ type: 'leave', room: roomId, peer: peerId });
+}
+
 // ---- Incoming server message router ----
 
 function handleServerMessage(msg) {
@@ -95,11 +104,25 @@ function handleServerMessage(msg) {
 		handleSignalingMessage(msg);
 		return;
 	}
+
+	if (msg.type === 'room_closed') {
+		showToast('Host ended the room', true);
+		disconnect();
+		return;
+	}
 }
 
 // Process a roster push from the server
 function processRoster(roster) {
 	log(`[Roster] ${roster.length} peer(s): ${JSON.stringify(roster.map(p => `${p.id}/${p.role}`))}`);
+
+	// Guests leave when the host is gone
+	if (!isHost && roster.length > 0 && !intentionalDisconnect && !roster.some(p => p.role === 'host')) {
+		logError('[Mesh] Host vanished, disconnecting');
+		showToast('Host ended the room!', true);
+		disconnect();
+		return;
+	}
 
 	const activeIds = roster.map(p => p.id);
 

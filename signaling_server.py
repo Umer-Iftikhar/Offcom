@@ -236,6 +236,33 @@ async def handle_connection(reader, writer):
                     elif mtype in ("offer", "answer", "candidate"):
                         await relay(msg["room"], msg["to"], msg)
 
+                    elif mtype == "leave":
+                        leaving_id  = msg.get("peer", peer_id)
+                        leaving_rid = msg.get("room", room_id)
+
+                        # If the host is explicitly leaving, tell the guests right away
+                        async with rooms_lock:
+                            room_obj = rooms.get(leaving_rid, {})
+                            leaver   = room_obj.get("peers", {}).get(leaving_id)
+                            is_host  = leaver and leaver.role == "host"
+                            if is_host:
+                                notify_writers = [
+                                    (pid, p.writer)
+                                    for pid, p in room_obj.get("peers", {}).items()
+                                    if pid != leaving_id and not p.left and p.writer
+                                ]
+                        if is_host:
+                            closed_msg = json.dumps({"type": "room_closed"})
+                            for pid, w in notify_writers:
+                                try:
+                                    await ws_send(w, closed_msg)
+                                    log(f"Sent room_closed to {pid}")
+                                except Exception:
+                                    pass
+
+                        await mark_left(leaving_rid, leaving_id)
+                        await broadcast_roster(leaving_rid)
+
             except Exception as e:
                 log(f"WS session error ({peer_id}): {e}")
             finally:
