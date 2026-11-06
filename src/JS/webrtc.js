@@ -75,6 +75,7 @@ function cleanupPeer(peerId) {
 	log(`[Cleanup] Removing peer ${peerId} (role=${p.role}, state=${p.pc?.connectionState})`);
 	if (p.pc)      { try { p.pc.close(); } catch(e) {} }
 	if (p.audioEl) { p.audioEl.srcObject = null; p.audioEl.remove(); }
+	delete iceCandidateBuffer[peerId];
 	delete peers[peerId];
 	updateCallStatus();
 }
@@ -94,6 +95,26 @@ async function initiateOffer(targetPeerId) {
 	} catch(err) {
 		logError(`[Mesh] Offer failed for ${targetPeerId}:`, err);
 	}
+}
+
+// ---- ICE candidate buffering ----
+// Candidates can arrive before the remote description is set; buffer them.
+
+async function flushIceCandidateBuffer(peerId) {
+	const buf = iceCandidateBuffer[peerId];
+	if (!buf || buf.length === 0) return;
+	logWebRTC(peerId, `Flushing ${buf.length} buffered ICE candidate(s).`);
+	const pc = peers[peerId]?.pc;
+	if (!pc) { logError(`[ICE Buffer] No PC for ${peerId}, discarding.`); delete iceCandidateBuffer[peerId]; return; }
+	for (const candidate of buf) {
+		try {
+			await pc.addIceCandidate(new RTCIceCandidate(candidate));
+			logWebRTC(peerId, 'Applied buffered ICE candidate.');
+		} catch(e) {
+			logError(`[ICE Buffer] Failed to apply candidate for ${peerId}:`, e);
+		}
+	}
+	delete iceCandidateBuffer[peerId];
 }
 
 // ---- Signaling message handler ----
@@ -117,14 +138,22 @@ async function handleSignalingMessage(msg) {
 			await pc.setLocalDescription(answer);
 			logWebRTC(fromId, 'Sent answer back.');
 			postMessage(fromId, 'answer', { sdp: answer });
+			await flushIceCandidateBuffer(fromId);
 
 		} else if (msg.type === 'answer') {
 			logWebRTC(fromId, 'Applying remote answer...');
 			await pc.setRemoteDescription(new RTCSessionDescription(msg.payload.sdp));
+			await flushIceCandidateBuffer(fromId);
 
 		} else if (msg.type === 'candidate') {
-			logWebRTC(fromId, 'Applying ICE candidate...');
-			await pc.addIceCandidate(new RTCIceCandidate(msg.payload.candidate));
+			if (!pc.remoteDescription?.type) {
+				logWebRTC(fromId, 'ICE candidate arrived before remote description — buffering.');
+				if (!iceCandidateBuffer[fromId]) iceCandidateBuffer[fromId] = [];
+				iceCandidateBuffer[fromId].push(msg.payload.candidate);
+			} else {
+				logWebRTC(fromId, 'Applying ICE candidate...');
+				await pc.addIceCandidate(new RTCIceCandidate(msg.payload.candidate));
+			}
 		}
 	} catch(e) {
 		logError(`[Mesh] Error handling ${msg.type} from ${fromId}:`, e);

@@ -41,3 +41,6 @@ let wsReady       = false;
 
 // ---- Multi-peer state ----
 const peers = {};   // peerId → { pc, name, role, audioEl, ... }
+
+// ---- ICE candidate buffer (keyed by peerId) ----
+let iceCandidateBuffer = {};
