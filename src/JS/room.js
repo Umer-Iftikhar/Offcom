@@ -131,6 +131,7 @@ async function disconnect() {
 
 
 	if (localStream)   { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+	if (audioContext)  { audioContext.close(); audioContext = null; micGainNode = analyserNode = localSource = null; }
 
 	currentRoomId = null;
 
@@ -163,4 +164,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 	await showScreen('screenRole');
 
 	log('=== OffCom Ready ===');
+});
+
+document.addEventListener('visibilitychange', () => {
+	if (!document.hidden) {
+		log('[System] Tab visible — resuming audio');
+		if (audioContext?.state === 'suspended') audioContext.resume();
+	}
 });

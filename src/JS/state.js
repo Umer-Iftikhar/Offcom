@@ -11,6 +11,10 @@ function logWebRTC(peerId, msg) { if (DEBUG) console.log(`[WebRTC - ${peerId}]`,
 
 // ---- Audio pipeline ----
 let localStream     = null;
+let audioContext    = null;
+let micGainNode     = null;
+let localSource     = null;
+let analyserNode    = null;
 
 // ---- Session ----
 let isHost                = false;
