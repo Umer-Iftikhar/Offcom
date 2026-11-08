@@ -27,6 +27,7 @@ function processLocalStream(stream) {
 	analyserNode.connect(micGainNode);
 	micGainNode.connect(destination);
 
+	applyTransmitMode();
 	return destination.stream;
 }
 
@@ -69,4 +70,64 @@ function updateMuteButtonUI() {
 	btn.style.opacity = '1';
 	btn.style.color   = isLocalMuted ? 'var(--red)' : 'var(--accent)';
 	btn.innerHTML     = isLocalMuted ? 'Mic: MUTED' : 'Mic: ON';
+}
+
+// ---- Transmit mode ----
+
+function setTransmitMode(mode) {
+	log('[Transmit] Setting mode to:', mode);
+	transmitMode = mode;
+	localStorage.setItem('offcom_transmit_mode', mode);
+
+	document.querySelectorAll('.transmit-btn').forEach(b => b.classList.remove('active'));
+	document.getElementById('transmit-' + mode)?.classList.add('active');
+
+	document.getElementById('voxHint')?.classList.toggle('hidden', mode !== 'vox');
+
+	if (voxCheckInterval) { clearInterval(voxCheckInterval); voxCheckInterval = null; }
+	if (voxHoldTimer)     { clearTimeout(voxHoldTimer);     voxHoldTimer = null; }
+	voxActive = false;
+
+	switch (mode) {
+		case 'open': if (micGainNode) micGainNode.gain.value = 1; break;
+		case 'vox':  if (micGainNode) micGainNode.gain.value = 0; startVOXMonitoring(); break;
+	}
+
+	updateMuteButtonUI();
+}
+
+function applyTransmitMode() {
+	const saved = localStorage.getItem('offcom_transmit_mode');
+	setTransmitMode(saved === 'vox' ? 'vox' : 'open');
+}
+
+// ---- VOX (voice-activated transmit) ----
+// Opens the mic while the average input level is above VOX_THRESHOLD,
+// and keeps it open for VOX_HOLD_MS after speech stops.
+
+function startVOXMonitoring() {
+	if (!analyserNode) return;
+	voxCheckInterval = setInterval(() => {
+		const data = new Uint8Array(analyserNode.frequencyBinCount);
+		analyserNode.getByteFrequencyData(data);
+		let sum = 0;
+		for (let i = 0; i < data.length; i++) sum += data[i];
+		const level = sum / data.length / 255;
+
+		if (level > VOX_THRESHOLD) {
+			if (!voxActive) {
+				voxActive = true;
+				if (micGainNode) micGainNode.gain.value = 1;
+			}
+			if (voxHoldTimer) { clearTimeout(voxHoldTimer); voxHoldTimer = null; }
+		} else if (voxActive) {
+			if (!voxHoldTimer) {
+				voxHoldTimer = setTimeout(() => {
+					voxActive    = false;
+					voxHoldTimer = null;
+					if (micGainNode) micGainNode.gain.value = 0;
+				}, VOX_HOLD_MS);
+			}
+		}
+	}, 30);
 }

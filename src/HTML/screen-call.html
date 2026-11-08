@@ -18,5 +18,15 @@
 			Waiting for connection...</div>
 	</div>
 
+	<!-- Transmit Mode Controls -->
+	<div class="card">
+		<div class="card-title">Transmit Mode</div>
+		<div class="transmit-buttons">
+			<button class="transmit-btn active" id="transmit-open" onclick="setTransmitMode('open')">Open</button>
+			<button class="transmit-btn" id="transmit-vox" onclick="setTransmitMode('vox')">VOX</button>
+		</div>
+		<p class="hint center hidden" id="voxHint" style="margin-top: 0.75rem;">Mic opens automatically when you speak</p>
+	</div>
+
 	<button class="btn btn-danger" onclick="disconnect()" style="margin-top: 1rem;">End Session</button>
 </div>

@@ -54,3 +54,9 @@ let iceCandidateBuffer = {};
 
 // ---- Mute / transmit mode ----
 let isLocalMuted     = false;
+let transmitMode     = 'open';
+const VOX_THRESHOLD  = 0.11;   // average mic level (0–1) that opens the mic
+const VOX_HOLD_MS    = 600;    // keep the mic open this long after speech stops
+let voxHoldTimer     = null;
+let voxActive        = false;
+let voxCheckInterval = null;

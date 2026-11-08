@@ -19,6 +19,7 @@ async function selectRole(role) {
 		preloadScreen('screenCall');
 
 		isLocalMuted = false;
+		applyTransmitMode();
 		updateMuteButtonUI();
 
 		showToast('Microphone ready!', false);
@@ -132,11 +133,15 @@ async function disconnect() {
 
 	for (const peerId of Object.keys(peers)) cleanupPeer(peerId);
 
+	if (voxCheckInterval)   { clearInterval(voxCheckInterval);   voxCheckInterval   = null; }
+	if (voxHoldTimer)       { clearTimeout(voxHoldTimer);       voxHoldTimer       = null; }
 
 	if (localStream)   { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
 	if (audioContext)  { audioContext.close(); audioContext = null; micGainNode = analyserNode = localSource = null; }
 
 	isLocalMuted = false;
+	voxActive    = false;
+	transmitMode = 'open';
 	currentRoomId = null;
 
 	updateMuteButtonUI();
