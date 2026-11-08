@@ -14,9 +14,11 @@ function createPeerConnection(peerId) {
 	});
 
 	if (localStream) {
-		localStream.getTracks().forEach(track => {
+		// Send the processed stream (gain node) so mute/VOX/PTT apply to what peers hear
+		const processed = processLocalStream(localStream);
+		processed.getTracks().forEach(track => {
 			logWebRTC(peerId, `Adding local track: ${track.kind}`);
-			pc.addTrack(track, localStream);
+			pc.addTrack(track, processed);
 		});
 	} else {
 		logError(`[WebRTC] localStream is null when creating PC for ${peerId}!`);

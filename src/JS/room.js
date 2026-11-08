@@ -18,6 +18,10 @@ async function selectRole(role) {
 		// Kick off screenCall fetch in background — it'll be in the DOM before ICE finishes
 		preloadScreen('screenCall');
 
+		isLocalMuted = false;
+		applyTransmitMode();
+		updateMuteButtonUI();
+
 		showToast('Microphone ready!', false);
 		await showScreen(isHost ? 'screenHost' : 'screenGuest');
 	} catch (err) {
@@ -129,10 +133,19 @@ async function disconnect() {
 
 	for (const peerId of Object.keys(peers)) cleanupPeer(peerId);
 
+	if (voxCheckInterval)   { clearInterval(voxCheckInterval);   voxCheckInterval   = null; }
+	if (voxHoldTimer)       { clearTimeout(voxHoldTimer);       voxHoldTimer       = null; }
 
 	if (localStream)   { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+	if (audioContext)  { audioContext.close(); audioContext = null; micGainNode = analyserNode = localSource = null; }
 
+	isLocalMuted = false;
+	voxActive    = false;
+	transmitMode = 'open';
+	isPttActive  = false;
 	currentRoomId = null;
+
+	updateMuteButtonUI();
 
 	const btn = document.getElementById('createOfferBtn');
 	if (btn) { btn.disabled = false; btn.innerHTML = 'Create Room'; }
@@ -163,4 +176,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 	await showScreen('screenRole');
 
 	log('=== OffCom Ready ===');
+});
+
+document.addEventListener('visibilitychange', () => {
+	if (!document.hidden) {
+		log('[System] Tab visible — resuming audio');
+		if (audioContext?.state === 'suspended') audioContext.resume();
+	}
 });

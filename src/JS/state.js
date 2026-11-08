@@ -11,6 +11,10 @@ function logWebRTC(peerId, msg) { if (DEBUG) console.log(`[WebRTC - ${peerId}]`,
 
 // ---- Audio pipeline ----
 let localStream     = null;
+let audioContext    = null;
+let micGainNode     = null;
+let localSource     = null;
+let analyserNode    = null;
 
 // ---- Session ----
 let isHost                = false;
@@ -47,3 +51,13 @@ const peers = {};   // peerId → { pc, name, role, audioEl, ... }
 
 // ---- ICE candidate buffer (keyed by peerId) ----
 let iceCandidateBuffer = {};
+
+// ---- Mute / transmit mode ----
+let isLocalMuted     = false;
+let transmitMode     = 'open';
+const VOX_THRESHOLD  = 0.11;   // average mic level (0–1) that opens the mic
+const VOX_HOLD_MS    = 600;    // keep the mic open this long after speech stops
+let voxHoldTimer     = null;
+let voxActive        = false;
+let voxCheckInterval = null;
+let isPttActive      = false;
