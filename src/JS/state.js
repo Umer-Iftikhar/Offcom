@@ -51,3 +51,6 @@ const peers = {};   // peerId → { pc, name, role, audioEl, ... }
 
 // ---- ICE candidate buffer (keyed by peerId) ----
 let iceCandidateBuffer = {};
+
+// ---- Mute / transmit mode ----
+let isLocalMuted     = false;

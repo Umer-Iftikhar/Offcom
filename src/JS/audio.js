@@ -51,3 +51,22 @@ function attachRemoteStream(peerId, stream) {
 
 	if (peers[peerId]) peers[peerId].audioEl = audioEl;
 }
+
+// ---- Mute ----
+
+function toggleLocalMute() {
+	isLocalMuted = !isLocalMuted;
+	if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = !isLocalMuted);
+	log(`[Audio] Mic manually ${isLocalMuted ? 'MUTED' : 'UNMUTED'}`);
+	updateMuteButtonUI();
+}
+
+function updateMuteButtonUI() {
+	const btn = document.getElementById('muteToggleBtn');
+	if (!btn) return;
+
+	btn.disabled      = false;
+	btn.style.opacity = '1';
+	btn.style.color   = isLocalMuted ? 'var(--red)' : 'var(--accent)';
+	btn.innerHTML     = isLocalMuted ? 'Mic: MUTED' : 'Mic: ON';
+}

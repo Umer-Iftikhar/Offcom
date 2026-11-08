@@ -18,6 +18,9 @@ async function selectRole(role) {
 		// Kick off screenCall fetch in background — it'll be in the DOM before ICE finishes
 		preloadScreen('screenCall');
 
+		isLocalMuted = false;
+		updateMuteButtonUI();
+
 		showToast('Microphone ready!', false);
 		await showScreen(isHost ? 'screenHost' : 'screenGuest');
 	} catch (err) {
@@ -133,7 +136,10 @@ async function disconnect() {
 	if (localStream)   { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
 	if (audioContext)  { audioContext.close(); audioContext = null; micGainNode = analyserNode = localSource = null; }
 
+	isLocalMuted = false;
 	currentRoomId = null;
+
+	updateMuteButtonUI();
 
 	const btn = document.getElementById('createOfferBtn');
 	if (btn) { btn.disabled = false; btn.innerHTML = 'Create Room'; }
