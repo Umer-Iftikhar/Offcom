@@ -56,6 +56,7 @@ function attachRemoteStream(peerId, stream) {
 // ---- Mute ----
 
 function toggleLocalMute() {
+	if (transmitMode === 'ptt') return;
 	isLocalMuted = !isLocalMuted;
 	if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = !isLocalMuted);
 	log(`[Audio] Mic manually ${isLocalMuted ? 'MUTED' : 'UNMUTED'}`);
@@ -65,6 +66,15 @@ function toggleLocalMute() {
 function updateMuteButtonUI() {
 	const btn = document.getElementById('muteToggleBtn');
 	if (!btn) return;
+
+	if (transmitMode === 'ptt') {
+		// PTT already controls the mic — the mute button is disabled in this mode
+		btn.disabled      = true;
+		btn.style.opacity = '0.4';
+		btn.style.color   = '';
+		btn.innerHTML     = 'Mic: PTT';
+		return;
+	}
 
 	btn.disabled      = false;
 	btn.style.opacity = '1';
@@ -83,6 +93,7 @@ function setTransmitMode(mode) {
 	document.getElementById('transmit-' + mode)?.classList.add('active');
 
 	document.getElementById('voxHint')?.classList.toggle('hidden', mode !== 'vox');
+	document.getElementById('pttContainer')?.classList.toggle('hidden', mode !== 'ptt');
 
 	if (voxCheckInterval) { clearInterval(voxCheckInterval); voxCheckInterval = null; }
 	if (voxHoldTimer)     { clearTimeout(voxHoldTimer);     voxHoldTimer = null; }
@@ -91,14 +102,18 @@ function setTransmitMode(mode) {
 	switch (mode) {
 		case 'open': if (micGainNode) micGainNode.gain.value = 1; break;
 		case 'vox':  if (micGainNode) micGainNode.gain.value = 0; startVOXMonitoring(); break;
+		case 'ptt':
+			if (micGainNode) micGainNode.gain.value = 0;
+			isPttActive = false;
+			document.getElementById('pttButton')?.classList.remove('ptt-active');
+			break;
 	}
 
 	updateMuteButtonUI();
 }
 
 function applyTransmitMode() {
-	const saved = localStorage.getItem('offcom_transmit_mode');
-	setTransmitMode(saved === 'vox' ? 'vox' : 'open');
+	setTransmitMode(localStorage.getItem('offcom_transmit_mode') || 'open');
 }
 
 // ---- VOX (voice-activated transmit) ----
@@ -130,4 +145,23 @@ function startVOXMonitoring() {
 			}
 		}
 	}, 30);
+}
+
+// ---- PTT (push-to-talk) ----
+// Mic transmits only while the button is held.
+
+function pttStart(e) {
+	if (e) e.preventDefault();
+	if (transmitMode !== 'ptt' || isPttActive) return;
+	isPttActive = true;
+	if (micGainNode) micGainNode.gain.value = 1;
+	document.getElementById('pttButton')?.classList.add('ptt-active');
+}
+
+function pttStop(e) {
+	if (e) e.preventDefault();
+	if (transmitMode !== 'ptt' || !isPttActive) return;
+	isPttActive = false;
+	if (micGainNode) micGainNode.gain.setTargetAtTime(0, audioContext.currentTime, 0.01);
+	document.getElementById('pttButton')?.classList.remove('ptt-active');
 }

@@ -24,8 +24,14 @@
 		<div class="transmit-buttons">
 			<button class="transmit-btn active" id="transmit-open" onclick="setTransmitMode('open')">Open</button>
 			<button class="transmit-btn" id="transmit-vox" onclick="setTransmitMode('vox')">VOX</button>
+			<button class="transmit-btn" id="transmit-ptt" onclick="setTransmitMode('ptt')">PTT</button>
 		</div>
 		<p class="hint center hidden" id="voxHint" style="margin-top: 0.75rem;">Mic opens automatically when you speak</p>
+		<div class="ptt-container hidden" id="pttContainer">
+			<button class="btn btn-ptt" id="pttButton" onmousedown="pttStart(event)" onmouseup="pttStop(event)"
+				onmouseleave="pttStop(event)" ontouchstart="pttStart(event)" ontouchend="pttStop(event)"
+				ontouchcancel="pttStop(event)">🎤 Hold to Talk</button>
+		</div>
 	</div>
 
 	<button class="btn btn-danger" onclick="disconnect()" style="margin-top: 1rem;">End Session</button>

@@ -60,3 +60,4 @@ const VOX_HOLD_MS    = 600;    // keep the mic open this long after speech stops
 let voxHoldTimer     = null;
 let voxActive        = false;
 let voxCheckInterval = null;
+let isPttActive      = false;

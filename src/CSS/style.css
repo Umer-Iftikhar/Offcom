@@ -204,6 +204,36 @@ input {
 	border-color: var(--accent);
 }
 
+/* PTT button & latch */
+.ptt-container {
+	margin-top: 0.75rem;
+	padding-top: 0.75rem;
+	border-top: 1px solid var(--border);
+}
+
+.btn-ptt {
+	padding: 1.5rem;
+	background: var(--surface-2);
+	border: 2px solid var(--border);
+	border-radius: 12px;
+	color: var(--text);
+	font-size: 1.1rem;
+	font-weight: 700;
+	cursor: pointer;
+	transition: all 0.15s;
+}
+
+.btn-ptt.ptt-active {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: #000;
+	transform: scale(0.98);
+}
+
+.btn-ptt:active {
+	transform: scale(0.95);
+}
+
 /* Room code display */
 .room-code {
 	text-align: center;

@@ -142,6 +142,7 @@ async function disconnect() {
 	isLocalMuted = false;
 	voxActive    = false;
 	transmitMode = 'open';
+	isPttActive  = false;
 	currentRoomId = null;
 
 	updateMuteButtonUI();
