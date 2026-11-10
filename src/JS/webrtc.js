@@ -32,6 +32,7 @@ function createPeerConnection(peerId) {
 		// Guest auto-enters call screen on first audio track
 		if (!isHost && document.getElementById('screenGuest')?.classList.contains('active')) {
 			await showScreen('screenCall');
+			refreshCallScreen();
 		}
 	};
 

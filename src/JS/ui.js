@@ -69,6 +69,44 @@ async function preloadScreen(screenId) {
 	}
 }
 
+// ---- Call screen refresh ----
+// screenCall is fetched lazily, so UI state written before it existed
+// (peer badges, myIdDisplay, transmit mode) can be lost. Call this every time
+// screenCall becomes active to replay all live state into its DOM.
+
+function refreshCallScreen() {
+	// Identity
+	const myIdDisplay = document.getElementById("myIdDisplay");
+	if (myIdDisplay) myIdDisplay.textContent = `${myUsername} (${myDeviceId})`;
+
+	// Rebuild peer badges from live state
+	const list = document.getElementById("peersList");
+	if (list) {
+		list.innerHTML = ""; // wipe so addPeerToUI duplicate-guard passes cleanly
+		for (const [pid, p] of Object.entries(peers)) {
+			addPeerToUI({ id: pid, name: p.name, role: p.role });
+			updatePeerBadge(pid, p.pc?.connectionState);
+		}
+	}
+
+	// Transmit mode — restore buttons and panels without resetting VOX/PTT state
+	document
+		.querySelectorAll(".transmit-btn")
+		.forEach((b) => b.classList.remove("active"));
+	document
+		.getElementById("transmit-" + transmitMode)
+		?.classList.add("active");
+	document
+		.getElementById("voxHint")
+		?.classList.toggle("hidden", transmitMode !== "vox");
+	document
+		.getElementById("pttContainer")
+		?.classList.toggle("hidden", transmitMode !== "ptt");
+
+	updateMuteButtonUI();
+	updateCallStatus();
+}
+
 // ---- Peer badge UI ----
 
 function addPeerToUI(peerObj) {
