@@ -80,7 +80,7 @@ async function createHostRoom() {
 
 async function startCallWithPeers() {
 	await showScreen('screenCall');
-	updateCallStatus();
+	refreshCallScreen();
 }
 
 // ---- Guest: join room ----
@@ -106,7 +106,7 @@ async function joinRoom(url, roomId) {
 		}
 
 		await showScreen('screenCall');
-		updateCallStatus();
+		refreshCallScreen();
 		showToast('Connected to room!', false);
 	} catch(err) {
 		logError('[Init] joinRoom error:', err);
