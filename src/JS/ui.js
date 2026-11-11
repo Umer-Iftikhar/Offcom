@@ -134,6 +134,10 @@ function updatePeerBadge(peerId, state) {
 			badge.classList.add("connected");
 			statusText = "● Connected";
 			break;
+		case "reconnecting":
+			badge.classList.add("reconnecting");
+			statusText = "↻ Reconnecting...";
+			break;
 		case "disconnected":
 		case "failed":
 			badge.classList.add("disconnected");

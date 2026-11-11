@@ -165,3 +165,24 @@ function pttStop(e) {
 	if (micGainNode) micGainNode.gain.setTargetAtTime(0, audioContext.currentTime, 0.01);
 	document.getElementById('pttButton')?.classList.remove('ptt-active');
 }
+
+// ---- Wake lock ----
+// Keeps the phone screen on during a call so the browser isn't suspended.
+
+async function requestWakeLock() {
+	try {
+		if ('wakeLock' in navigator) {
+			wakeLock = await navigator.wakeLock.request('screen');
+			wakeLock.addEventListener('release', () => { wakeLock = null; });
+			log('[WakeLock] Acquired');
+		}
+	} catch(e) { logError('[WakeLock] Error:', e); }
+}
+
+function releaseWakeLock() {
+	if (wakeLock) {
+		log('[WakeLock] Released');
+		wakeLock.release();
+		wakeLock = null;
+	}
+}

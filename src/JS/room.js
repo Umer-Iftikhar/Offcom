@@ -108,6 +108,7 @@ async function joinRoom(url, roomId) {
 		await showScreen('screenCall');
 		refreshCallScreen();
 		showToast('Connected to room!', false);
+		requestWakeLock();
 	} catch(err) {
 		logError('[Init] joinRoom error:', err);
 		showToast('Error joining: ' + err.message, true);
@@ -135,6 +136,7 @@ async function disconnect() {
 
 	if (voxCheckInterval)   { clearInterval(voxCheckInterval);   voxCheckInterval   = null; }
 	if (voxHoldTimer)       { clearTimeout(voxHoldTimer);       voxHoldTimer       = null; }
+	if (hostVanishedTimer)  { clearTimeout(hostVanishedTimer);  hostVanishedTimer  = null; }
 
 	if (localStream)   { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
 	if (audioContext)  { audioContext.close(); audioContext = null; micGainNode = analyserNode = localSource = null; }
@@ -159,6 +161,7 @@ async function disconnect() {
 	const startBtn = document.getElementById('startCallBtn');
 	if (startBtn) startBtn.style.display = 'none';
 
+	releaseWakeLock();
 	await showScreen('screenRole');
 }
 
@@ -171,6 +174,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 	if (typeof qrcode === 'undefined')         showToast('ERROR: QR library not loaded!', true);
 	if (typeof jsQR === 'undefined')           showToast('ERROR: Scanner library not loaded!', true);
 	if (!navigator.mediaDevices?.getUserMedia) showToast('ERROR: Microphone access not supported (use HTTPS)!', true);
+	requestWakeLock();
 
 	// Boot the first screen dynamically
 	await showScreen('screenRole');
@@ -181,6 +185,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 document.addEventListener('visibilitychange', () => {
 	if (!document.hidden) {
 		log('[System] Tab visible — resuming audio');
+		requestWakeLock();
 		if (audioContext?.state === 'suspended') audioContext.resume();
 	}
 });
