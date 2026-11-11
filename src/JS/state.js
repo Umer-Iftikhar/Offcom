@@ -21,6 +21,7 @@ let isHost                = false;
 let currentRoomId         = null;
 let signalingUrl          = window.location.origin;
 let intentionalDisconnect = false;
+let wakeLock              = null;
 
 // ---- Identity (persisted across sessions) ----
 function generateRandomId(len) {
