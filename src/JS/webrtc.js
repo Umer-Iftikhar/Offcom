@@ -128,6 +128,7 @@ async function initiateOffer(targetPeerId, iceRestart = false) {
 		const opts = iceRestart ? { iceRestart: true } : {};
 		logWebRTC(targetPeerId, `Creating offer${iceRestart ? ' (ICE restart)' : ''}...`);
 		const offer = await pc.createOffer(opts);
+		offer.sdp = enforceOpusFEC(offer.sdp);
 		await pc.setLocalDescription(offer);
 		logWebRTC(targetPeerId, 'Offer set as local description, posting to server.');
 		postMessage(targetPeerId, 'offer', { sdp: offer });
@@ -263,6 +264,7 @@ async function handleSignalingMessage(msg) {
 			logWebRTC(fromId, 'Applying remote offer...');
 			await pc.setRemoteDescription(new RTCSessionDescription(msg.payload.sdp));
 			const answer = await pc.createAnswer();
+			answer.sdp = enforceOpusFEC(answer.sdp);
 			await pc.setLocalDescription(answer);
 			logWebRTC(fromId, 'Sent answer back.');
 			postMessage(fromId, 'answer', { sdp: answer });
@@ -285,5 +287,23 @@ async function handleSignalingMessage(msg) {
 		}
 	} catch(e) {
 		logError(`[Mesh] Error handling ${msg.type} from ${fromId}:`, e);
+	}
+}
+
+// ---- Connection quality ----
+
+// Turn on Opus in-band forward error correction so short packet loss on a
+// busy hotspot is concealed instead of heard as dropouts.
+function enforceOpusFEC(sdp) {
+	// Find the Opus payload type (usually 111)
+	const match = sdp.match(/a=rtpmap:(\d+) opus\/48000\/2/i);
+	if (!match) return sdp;
+	const pt = match[1];
+
+	const fmtpRegex = new RegExp(`a=fmtp:${pt} (.*)`);
+	if (fmtpRegex.test(sdp)) {
+		return sdp.replace(fmtpRegex, `a=fmtp:${pt} $1;useinbandfec=1;usedtx=0;cbr=1`);
+	} else {
+		return sdp + `a=fmtp:${pt} useinbandfec=1;usedtx=0;cbr=1\r\n`;
 	}
 }
