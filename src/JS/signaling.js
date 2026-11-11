@@ -56,6 +56,7 @@ function openWebSocket(roomId) {
 			log(`[WS] Closed (code=${e.code} intentional=${intentionalDisconnect})`);
 			wsReady = false;
 			stopWsPing();
+			if (!intentionalDisconnect) scheduleWsReconnect(roomId);
 		};
 	});
 }
@@ -79,8 +80,27 @@ function stopWsPing() {
 	if (wsPingTimer) { clearInterval(wsPingTimer); wsPingTimer = null; }
 }
 
+function scheduleWsReconnect(roomId, delayMs = 1000) {
+	if (wsReconnTimer) return;
+	log(`[WS] Scheduling reconnect in ${delayMs}ms...`);
+	wsReconnTimer = setTimeout(async () => {
+		wsReconnTimer = null;
+		if (intentionalDisconnect || !currentRoomId) return;
+		log('[WS] Attempting reconnect...');
+		try {
+			await openWebSocket(roomId);
+			log('[WS] Reconnected');
+		} catch(e) {
+			logError('[WS] Reconnect failed:', e);
+			// Back off slightly on repeated failures (max 5s)
+			scheduleWsReconnect(roomId, Math.min(delayMs * 1.5, 5000));
+		}
+	}, delayMs);
+}
+
 function closeWebSocket() {
 	stopWsPing();
+	if (wsReconnTimer) { clearTimeout(wsReconnTimer); wsReconnTimer = null; }
 	wsReady = false;
 	if (ws) { try { ws.close(); } catch(e) {} ws = null; }
 }
@@ -123,6 +143,8 @@ function handleServerMessage(msg) {
 
 	if (msg.type === 'room_closed') {
 		showToast('Host ended the room', true);
+		// Cancel any pending grace-period timer — the host explicitly left, no point waiting
+		if (hostVanishedTimer) { clearTimeout(hostVanishedTimer); hostVanishedTimer = null; }
 		disconnect();
 		return;
 	}
@@ -130,22 +152,46 @@ function handleServerMessage(msg) {
 
 // Process a roster push from the server
 function processRoster(roster) {
-	log(`[Roster] ${roster.length} peer(s): ${JSON.stringify(roster.map(p => `${p.id}/${p.role}`))}`);
+	log(`[Roster] ${roster.length} peer(s): ${JSON.stringify(roster.map(p => `${p.id}/${p.role}/v${p.ver}`))}`);
 
-	// Guests leave when the host is gone
-	if (!isHost && roster.length > 0 && !intentionalDisconnect && !roster.some(p => p.role === 'host')) {
-		logError('[Mesh] Host vanished, disconnecting');
-		showToast('Host ended the room!', true);
-		disconnect();
-		return;
+	if (!isHost) {
+		const hostActive = roster.some(p => p.role === 'host');
+		if (!hostActive && roster.length > 0 && !intentionalDisconnect) {
+			// Don't hard-disconnect immediately — the host's WS might have just blipped
+			// (Android hotspot network shuffle). Give it a grace period to come back.
+			if (!hostVanishedTimer) {
+				log(`[Mesh] Host missing from roster — grace period started (${HOST_VANISHED_GRACE_MS}ms)`);
+				hostVanishedTimer = setTimeout(() => {
+					hostVanishedTimer = null;
+					if (!intentionalDisconnect && !Object.values(peers).some(p => p.role === 'host')) {
+						logError('[Mesh] Host vanished — grace period expired, disconnecting');
+						showToast('Host ended the room!', true);
+						disconnect();
+					}
+				}, HOST_VANISHED_GRACE_MS);
+			}
+			// Don't process peer adds/removes while waiting — roster may be mid-transition
+			return;
+		} else if (hostActive && hostVanishedTimer) {
+			clearTimeout(hostVanishedTimer);
+			hostVanishedTimer = null;
+			log('[Mesh] Host reappeared — grace period cancelled');
+		}
 	}
 
 	const activeIds = roster.map(p => p.id);
 
-	// Remove peers no longer in roster
+	// Remove peers no longer in roster, or that have rejoined with a higher ver
 	for (const pid of Object.keys(peers)) {
-		if (!activeIds.includes(pid)) {
-			showToast(`${peers[pid].name} left`, false);
+		const remote      = roster.find(p => p.id === pid);
+		const hasRejoined = remote && remote.ver > (peers[pid].ver || 0);
+		if (!activeIds.includes(pid) || hasRejoined) {
+			if (hasRejoined) {
+				log(`[Mesh] ${pid} rejoined (ver ${peers[pid].ver} → ${remote.ver})`);
+				showToast(`${peers[pid].name} rejoined`, false);
+			} else {
+				showToast(`${peers[pid].name} left`, false);
+			}
 			cleanupPeer(pid);
 		}
 	}

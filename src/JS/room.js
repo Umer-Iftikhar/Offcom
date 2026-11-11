@@ -135,6 +135,7 @@ async function disconnect() {
 
 	if (voxCheckInterval)   { clearInterval(voxCheckInterval);   voxCheckInterval   = null; }
 	if (voxHoldTimer)       { clearTimeout(voxHoldTimer);       voxHoldTimer       = null; }
+	if (hostVanishedTimer)  { clearTimeout(hostVanishedTimer);  hostVanishedTimer  = null; }
 
 	if (localStream)   { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
 	if (audioContext)  { audioContext.close(); audioContext = null; micGainNode = analyserNode = localSource = null; }

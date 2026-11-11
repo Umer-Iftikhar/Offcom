@@ -45,6 +45,7 @@ let ws            = null;
 let wsReady       = false;
 let wsPingTimer   = null;
 const WS_PING_MS  = 10000;
+let wsReconnTimer = null;
 
 // ---- Multi-peer state ----
 const peers = {};   // peerId → { pc, name, role, audioEl, ... }
@@ -61,3 +62,9 @@ let voxHoldTimer     = null;
 let voxActive        = false;
 let voxCheckInterval = null;
 let isPttActive      = false;
+
+// ---- Host-vanished grace period ----
+// Don't hard-disconnect on the first missing-host roster push.
+// Network blips on Android hotspot cause brief host WS drops.
+let hostVanishedTimer = null;
+const HOST_VANISHED_GRACE_MS = 8000;

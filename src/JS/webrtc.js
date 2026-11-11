@@ -2,6 +2,10 @@
 // webrtc.js — RTCPeerConnection, ICE, reconnection
 // ============================================
 
+// ---- ICE restart constants ----
+const ICE_RESTART_TIMEOUT_MS = 8000;  // wait this long for ICE restart before full teardown
+const MAX_RECONNECT_ATTEMPTS = 3;
+
 // ---- PeerConnection factory ----
 
 function createPeerConnection(peerId) {
@@ -43,6 +47,29 @@ function createPeerConnection(peerId) {
 
 		updatePeerBadge(peerId, pc.connectionState);
 		updateCallStatus();
+
+		if (pc.connectionState === 'connected') {
+			// Successful (re)connect — cancel any pending recovery timers
+			if (p.iceRestartTimer) {
+				clearTimeout(p.iceRestartTimer);
+				p.iceRestartTimer = null;
+			}
+			p.reconnectAttempts = 0;
+			return;
+		}
+
+		if (intentionalDisconnect) return;
+
+		if (pc.connectionState === 'disconnected') {
+			// Soft failure — try ICE restart first (keeps DTLS alive, finds new path)
+			logError(`[WebRTC] ${peerId} disconnected, attempting ICE restart`);
+			attemptIceRestart(peerId);
+		} else if (pc.connectionState === 'failed') {
+			// Hard failure — go straight to full PC teardown
+			logError(`[WebRTC] ${peerId} failed, doing full reconnect`);
+			if (p.iceRestartTimer) { clearTimeout(p.iceRestartTimer); p.iceRestartTimer = null; }
+			doFullReconnect(peerId);
+		}
 	};
 
 	pc.onsignalingstatechange     = () => logWebRTC(peerId, `Signaling state -> ${pc.signalingState}`);
@@ -70,6 +97,9 @@ function initPeer(peerObj) {
 		name:               peerObj.name,
 		role:               peerObj.role,
 		audioEl:            null,
+		ver:                peerObj.ver || 0,
+		reconnectAttempts:  0,
+		iceRestartTimer:    null,
 	};
 	addPeerToUI(peerObj);
 	updateHostUI();
@@ -79,6 +109,7 @@ function cleanupPeer(peerId) {
 	const p = peers[peerId];
 	if (!p) return;
 	log(`[Cleanup] Removing peer ${peerId} (role=${p.role}, state=${p.pc?.connectionState})`);
+	if (p.iceRestartTimer) { clearTimeout(p.iceRestartTimer); p.iceRestartTimer = null; }
 	if (p.pc)      { try { p.pc.close(); } catch(e) {} }
 	if (p.audioEl) { p.audioEl.srcObject = null; p.audioEl.remove(); }
 	delete iceCandidateBuffer[peerId];
@@ -89,18 +120,85 @@ function cleanupPeer(peerId) {
 
 // ---- Offer / Answer ----
 
-async function initiateOffer(targetPeerId) {
+async function initiateOffer(targetPeerId, iceRestart = false) {
 	const p = peers[targetPeerId];
 	if (!p) return;
 	const pc = p.pc;
 	try {
-		logWebRTC(targetPeerId, 'Creating offer...');
-		const offer = await pc.createOffer();
+		const opts = iceRestart ? { iceRestart: true } : {};
+		logWebRTC(targetPeerId, `Creating offer${iceRestart ? ' (ICE restart)' : ''}...`);
+		const offer = await pc.createOffer(opts);
 		await pc.setLocalDescription(offer);
 		logWebRTC(targetPeerId, 'Offer set as local description, posting to server.');
 		postMessage(targetPeerId, 'offer', { sdp: offer });
 	} catch(err) {
 		logError(`[Mesh] Offer failed for ${targetPeerId}:`, err);
+	}
+}
+
+// ---- Reconnection ----
+
+/**
+ * Stage 1 — ICE restart: reuse the existing PC, send a new offer with iceRestart:true.
+ * The DTLS session stays alive; only ICE credentials are refreshed.
+ * If recovery doesn't happen within ICE_RESTART_TIMEOUT_MS, escalate to full teardown.
+ */
+function attemptIceRestart(peerId) {
+	const p = peers[peerId];
+	if (!p || intentionalDisconnect) return;
+
+	// Only do one ICE restart attempt before escalating
+	if (p.reconnectAttempts > 0) {
+		doFullReconnect(peerId);
+		return;
+	}
+
+	p.reconnectAttempts++;
+	log(`[Reconnect] ICE restart attempt for ${peerId}`);
+	updatePeerBadge(peerId, 'reconnecting');
+
+	// Arm a fallback timer
+	if (p.iceRestartTimer) clearTimeout(p.iceRestartTimer);
+	p.iceRestartTimer = setTimeout(() => {
+		p.iceRestartTimer = null;
+		const current = peers[peerId];
+		if (current && current.pc.connectionState !== 'connected') {
+			log(`[Reconnect] ICE restart timed out for ${peerId}, escalating to full reconnect`);
+			doFullReconnect(peerId);
+		}
+	}, ICE_RESTART_TIMEOUT_MS);
+
+	// Guest sends ICE restart offer; host just waits for it on the same PC
+	if (!isHost) {
+		initiateOffer(peerId, true);
+	}
+}
+
+/**
+ * Stage 2 — Full teardown: close the old PC, create a fresh one, guest sends a new offer.
+ */
+function doFullReconnect(peerId) {
+	const p = peers[peerId];
+	if (!p || intentionalDisconnect) return;
+
+	if (p.iceRestartTimer) { clearTimeout(p.iceRestartTimer); p.iceRestartTimer = null; }
+
+	if (p.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+		showToast(`${p.name} disconnected`, true);
+		cleanupPeer(peerId);
+		return;
+	}
+
+	p.reconnectAttempts++;
+	log(`[Reconnect] Full reconnect attempt ${p.reconnectAttempts} for ${peerId}`);
+	updatePeerBadge(peerId, 'reconnecting');
+
+	p.pc.close();
+	p.pc = createPeerConnection(peerId);
+
+	// Guest always initiates the fresh offer
+	if (!isHost) {
+		initiateOffer(peerId, false);
 	}
 }
 
@@ -142,10 +240,19 @@ async function handleSignalingMessage(msg) {
 		const connState = p.pc.connectionState;
 		log(`[Mesh] Offer from ${fromId}: signalingState=${sigState} connectionState=${connState}`);
 
-		if (sigState !== 'stable' || connState === 'connected') {
+		// ICE restart offer arrives on a disconnected/failed PC — keep the same PC, don't recreate
+		const isIceRestartOffer = connState === 'disconnected' || connState === 'failed';
+
+		if (!isIceRestartOffer && (sigState !== 'stable' || connState === 'connected')) {
 			logError(`[Mesh] Glare or stale state (sig=${sigState} conn=${connState}), recreating PC`);
 			p.pc.close();
 			p.pc = createPeerConnection(fromId);
+		}
+
+		// Cancel any pending ICE restart timer — the offer itself IS the restart
+		if (p.iceRestartTimer) {
+			clearTimeout(p.iceRestartTimer);
+			p.iceRestartTimer = null;
 		}
 	}
 

@@ -300,6 +300,16 @@ input {
 	color: var(--red);
 }
 
+.peer-badge.reconnecting {
+	background: rgba(255, 200, 0, 0.1);
+	border-color: #ffc800;
+	animation: pulseYellow 1.2s infinite;
+}
+
+.peer-badge.reconnecting .peer-status {
+	color: #ffc800;
+}
+
 @keyframes pulse {
 
 	0%,
@@ -309,6 +319,18 @@ input {
 
 	50% {
 		box-shadow: 0 0 0 8px rgba(0, 255, 136, 0);
+	}
+}
+
+@keyframes pulseYellow {
+
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 rgba(255, 200, 0, 0.4);
+	}
+
+	50% {
+		box-shadow: 0 0 0 8px rgba(255, 200, 0, 0);
 	}
 }
 
