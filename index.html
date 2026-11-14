@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0"
+		/>
+		<meta name="theme-color" content="#0a0a0f" />
+		<title>OffCom - Group Voice Intercom</title>
+		<link rel="stylesheet" href="./src/CSS/style.css" />
+	</head>
+
+	<body>
+		<!-- Header -->
+		<div class="header">
+			<div class="logo">
+				<div class="logo-icon">&#127908;</div>
+				<span>OffCom</span>
+			</div>
+		</div>
+
+		<!-- Main Content Container -->
+		<div class="content" id="mainContent">
+			<!-- Screens are injected here dynamically -->
+		</div>
+
+		<!-- Overlays (injected lazily) -->
+		<div id="overlayContainer"></div>
+
+		<!-- Toast -->
+		<div class="toast" id="toast"></div>
+
+		<!-- QR Libraries -->
+		<script src="./src/JS/lib/qrcode-generator.js"></script>
+		<script src="./src/JS/lib/jsQR.js"></script>
+		<!-- OffCom modules -->
+		<script src="./src/JS/state.js"></script>
+		<script src="./src/JS/audio.js"></script>
+		<script src="./src/JS/ui.js"></script>
+		<script src="./src/JS/webrtc.js"></script>
+		<script src="./src/JS/signaling.js"></script>
+		<script src="./src/JS/room.js"></script>
+	</body>
+</html>

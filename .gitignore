@@ -1,0 +1,9 @@
+# TLS certificates (generated locally, never commit)
+*.pem
+
+# Python
+__pycache__/
+
+# OS / editor
+.DS_Store
+.vscode/
